@@ -1,0 +1,6 @@
+{
+  "appId": "com.karate.match",
+  "appName": "Karate Match",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
