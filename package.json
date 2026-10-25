@@ -1,0 +1,16 @@
+{
+  "name": "karate-match-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Karate Match HTML game packaged for Android with Capacitor",
+  "scripts": {
+    "build:android": "npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "6.2.1",
+    "@capacitor/core": "6.2.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "6.2.1"
+  }
+}

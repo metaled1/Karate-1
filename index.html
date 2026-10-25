@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Karate Match - Prototipo</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #2c1e16; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden; touch-action: none; }
+        #game-container { display: flex; flex-direction: column; width: 100%; max-width: 500px; height: 100%; }
+        #combat-zone { height: 35%; display: flex; justify-content: space-between; align-items: center; padding: 10px; background-color: #3b2b20; border-bottom: 4px solid #1a110c; position: relative; box-sizing: border-box; }
+        .fighter { width: 80px; height: 120px; background-color: #ddd; border-radius: 10px; display: flex; justify-content: center; align-items: center; font-size: 40px; transition: transform 0.1s; }
+        .target { width: 100px; height: 100px; background-color: #8b4513; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 40px; transition: transform 0.1s; }
+        #stats { text-align: center; font-size: 14px; margin-top: 5px; }
+        #target-hp { color: #ff4d4d; font-weight: bold; font-size: 18px; }
+        #board { flex-grow: 1; min-height: 0; display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); gap: 2px; padding: 5px; background-color: #1a110c; box-sizing: border-box; }
+        .gem { min-width: 0; min-height: 0; border-radius: 5px; cursor: pointer; box-shadow: inset 0 0 10px rgba(255,255,255,0.5); }
+        .gem.selected { outline: 3px solid white; transform: scale(0.9); }
+        .dmg-text { position: absolute; color: yellow; font-weight: bold; font-size: 24px; animation: floatUp 0.8s forwards; pointer-events: none; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-50px); } }
+        .punch { transform: translateX(20px) !important; }
+        .hit { transform: scale(1.1) rotate(5deg) !important; }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="combat-zone">
+            <div class="fighter" id="fighter">🥋</div>
+            <div style="text-align: center;">
+                <div id="target-name">Saco de Boxeo</div>
+                <div id="target-hp">HP: 100</div>
+            </div>
+            <div class="target" id="target">🥊</div>
+        </div>
+        <div id="stats">
+            Puntos: <span id="score">0</span> |
+            Max Combo: <span id="max-combo">0</span> |
+            Max Daño: <span id="max-dmg">0</span>
+        </div>
+        <div id="board"></div>
+    </div>
+    <script>
+        const BOARD_SIZE = 8;
+        const COLORS = ['red', 'blue', 'green', 'yellow'];
+        const COLOR_HEX = { red: '#ff3333', blue: '#3388ff', green: '#33cc33', yellow: '#ffcc00' };
+        const COLOR_ATTACKS = { red: 'Golpe Alto', blue: 'Patada Alta', green: 'Golpe Bajo', yellow: 'Patada Baja' };
+        let board = [];
+        let score = 0;
+        let maxCombo = 0;
+        let maxDmg = 0;
+        let selectedGem = null;
+        let isAnimating = false;
+        const targets = [
+            { name: 'Saco de Boxeo', hp: 100, maxHp: 100, icon: '🥊' },
+            { name: 'Auto', hp: 1000, maxHp: 1000, icon: '🚗' },
+            { name: 'Roca', hp: 5000, maxHp: 5000, icon: '🪨' }
+        ];
+        let currentTargetIndex = 0;
+
+        function initBoard() {
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+            board = [];
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                let row = [];
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    let color = COLORS[Math.floor(Math.random() * COLORS.length)];
+                    row.push(color);
+                    const gem = document.createElement('div');
+                    gem.className = 'gem';
+                    gem.style.backgroundColor = COLOR_HEX[color];
+                    gem.dataset.row = r;
+                    gem.dataset.col = c;
+                    gem.dataset.color = color;
+                    gem.addEventListener('click', () => selectGem(r, c));
+                    boardEl.appendChild(gem);
+                }
+                board.push(row);
+            }
+            updateTargetUI();
+        }
+
+        function selectGem(r, c) {
+            if (isAnimating) return;
+            const gemEl = document.querySelector(`.gem[data-row="${r}"][data-col="${c}"]`);
+            if (!selectedGem) {
+                selectedGem = { r, c, el: gemEl };
+                gemEl.classList.add('selected');
+            } else {
+                const prev = selectedGem;
+                prev.el.classList.remove('selected');
+                if (Math.abs(prev.r - r) + Math.abs(prev.c - c) === 1) {
+                    swapGems(prev.r, prev.c, r, c);
+                } else {
+                    selectedGem = { r, c, el: gemEl };
+                    gemEl.classList.add('selected');
+                }
+            }
+        }
+
+        function swapGems(r1, c1, r2, c2) {
+            const tempColor = board[r1][c1];
+            board[r1][c1] = board[r2][c2];
+            board[r2][c2] = tempColor;
+            updateGemUI(r1, c1);
+            updateGemUI(r2, c2);
+            selectedGem = null;
+            setTimeout(checkMatches, 300);
+        }
+
+        function updateGemUI(r, c) {
+            const el = document.querySelector(`.gem[data-row="${r}"][data-col="${c}"]`);
+            el.style.backgroundColor = COLOR_HEX[board[r][c]];
+            el.dataset.color = board[r][c];
+        }
+
+        function checkMatches() {
+            // Prototipo: cualquier intercambio válido activa un ataque.
+            executeCombo(1, ['red']);
+        }
+
+        function executeCombo(comboLength, colors) {
+            isAnimating = true;
+            let totalDamage = 0;
+            colors.forEach((color, index) => {
+                setTimeout(() => {
+                    let dmg = 10 * comboLength;
+                    totalDamage += dmg;
+                    attackEffect(color, dmg);
+                }, index * 300);
+            });
+            setTimeout(() => {
+                isAnimating = false;
+                if (totalDamage > maxDmg) {
+                    maxDmg = totalDamage;
+                    document.getElementById('max-dmg').innerText = maxDmg;
+                }
+                if (comboLength > maxCombo) {
+                    maxCombo = comboLength;
+                    document.getElementById('max-combo').innerText = maxCombo;
+                }
+                score += totalDamage;
+                document.getElementById('score').innerText = score;
+                initBoard();
+            }, colors.length * 300 + 500);
+        }
+
+        function attackEffect(color, dmg) {
+            const fighter = document.getElementById('fighter');
+            const target = document.getElementById('target');
+            const combatZone = document.getElementById('combat-zone');
+            fighter.classList.add('punch');
+            setTimeout(() => fighter.classList.remove('punch'), 150);
+            setTimeout(() => {
+                target.classList.add('hit');
+                setTimeout(() => target.classList.remove('hit'), 150);
+            }, 100);
+            const dmgText = document.createElement('div');
+            dmgText.className = 'dmg-text';
+            dmgText.innerText = `-${dmg}`;
+            dmgText.style.left = '50%';
+            dmgText.style.top = '50%';
+            combatZone.appendChild(dmgText);
+            setTimeout(() => dmgText.remove(), 800);
+            let currentTarget = targets[currentTargetIndex];
+            currentTarget.hp -= dmg;
+            if (currentTarget.hp < 0) currentTarget.hp = 0;
+            updateTargetUI();
+            if (currentTarget.hp <= 0) {
+                if (currentTargetIndex < targets.length - 1) {
+                    const defeatedName = currentTarget.name;
+                    currentTargetIndex++;
+                    setTimeout(() => {
+                        alert(`¡Has destruido el ${defeatedName}! Siguiente objetivo: ${targets[currentTargetIndex].name}`);
+                        updateTargetUI();
+                    }, 500);
+                } else {
+                    setTimeout(() => {
+                        alert('¡Felicidades! Has completado el juego.');
+                        currentTargetIndex = 0;
+                        targets.forEach(t => t.hp = t.maxHp);
+                        initBoard();
+                        updateTargetUI();
+                    }, 500);
+                }
+            }
+        }
+
+        function updateTargetUI() {
+            const target = targets[currentTargetIndex];
+            document.getElementById('target-name').innerText = target.name;
+            document.getElementById('target-hp').innerText = `HP: ${target.hp} / ${target.maxHp}`;
+            document.getElementById('target').innerText = target.icon;
+        }
+        initBoard();
+    </script>
+</body>
+</html>
